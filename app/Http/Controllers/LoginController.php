@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use App\Models\User;
+use Illuminate\Support\Facades\Validator;
 
 class LoginController extends Controller
 {
@@ -15,19 +16,46 @@ class LoginController extends Controller
 
     public function login(Request $request)
     {
-        $credentials = $request->only('email', 'password');
+        $validator = Validator::make($request->all(), [
+            'email' => 'required|email',
+            'password' => 'required',
+        ]);
 
-        if (Auth::attempt($credentials)) {
-            // Redirect to the products page after successful login
-            return redirect()->route('products.index');
+        if ($validator->fails()) {
+            return redirect()
+                ->back()
+                ->withErrors($validator)
+                ->withInput($request->except('password'));
         }
 
-        return redirect()->back()->with('error', 'Invalid credentials')->withInput();
+        $credentials = $request->only('email', 'password');
+        $remember = $request->filled('remember');
+
+        if (Auth::attempt($credentials, $remember)) {
+            $request->session()->regenerate();
+            
+            return redirect()
+                ->intended(route('products.index'))
+                ->with('success', 'Welcome back!');
+        }
+
+        return redirect()
+            ->back()
+            ->withErrors([
+                'email' => 'The provided credentials do not match our records.',
+            ])
+            ->withInput($request->except('password'));
     }
 
-    public function logout()
+    public function logout(Request $request)
     {
         Auth::logout();
-        return redirect()->route('login.form');
+        
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+        
+        return redirect()
+            ->route('login.form')
+            ->with('success', 'You have been logged out successfully.');
     }
 }
